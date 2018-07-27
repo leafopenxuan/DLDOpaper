@@ -8,9 +8,9 @@
 \usepackage{dblfloatfix}
 
 %%%Undefined packages
-\usepackage{todonotes}
-\usepackage{changes}
-\definechangesauthor[name={Min Tan} color=orange]{MT}
+% \usepackage{todonotes}
+% \usepackage{changes}
+% \definechangesauthor[name={Min Tan} color=orange]{MT}
 
 \begin{document}
 \title{A Single-Control-Circuit Multiple-Output Digital Low Dropout Regulator With Delay Switching}
@@ -79,7 +79,7 @@ Fig.\ref{fig:MRM} shows the working principle of the TDM scheme. The MUX and DEM
     \caption{Timing diagram of the SIMO DC-DC converter}
     \label{fig:DCDC-timing}
 \end{figure}
-The DC-DC converters are usually applied in the SoC power management circuit for its high converting efficiency. However an off-chip inductor is required for every DC-DC converter. When multiple power domains exists, which is quite normal in a SoC circuit, multiple DC-DC converters are implemented conventionally. This not only increase the number of required on-chip pads, but also may bring about great noise to the circuit. In \cite{SIMODCDC} an single inductor multiple output (SIMO) DC-DC buck converter is proposed, as is shown in Fig\ref{fig:DCDC}.
+The DC-DC converters are usually applied in the SoC power management circuit for its high converting efficiency. However an off-chip inductor is required for every DC-DC converter. When multiple power domains exists, which is quite normal in a SoC circuit, multiple DC-DC converters are implemented conventionally. This not only increase the number of required on-chip pads, but also may bring about great noise to the circuit. In \cite{SIMODCDC,SIMODCDC1,SIMODCDC2} an single inductor multiple output (SIMO) DC-DC buck converter is proposed, as is shown in Fig\ref{fig:DCDC}.
 
 Both sub-converter a and converter b are operating in DCM mode, and Fig\ref{fig:DCDC-timing} explicitly interprets the working principle. $\Phi a$ and $\Phi b$ are two complementary phase signals which indicate the regulating period. When $\Phi a = 1$, the sub-converter A is connected to the inductor, and the current through the inductor ramps up at $D_{1a}T$ and ramp down at $D_{2a}T$. Similar current behavior happens again when $\Phi b =1$, and the current is assigned to different sub-converters without affecting each other. 
 
@@ -153,6 +153,16 @@ The multiplexers connected to latch groups are controlled by the ``path'' signal
     \caption{Shared AA loop}
     \label{fig:sharedAAloop}
 \end{figure}
+\subsection{Coarse-fine switching}
+In shift register based DLDO, there is always a trade off between accuracy and speed. To obtain a faster transient response, the size of the power PMOS array units need to be large. However, a larger units may bring about larger ripple when the output settles and one unit toggles between ON and OFF. If we choose a smaller PMOS array unit, the output ripple may be small, but there needs to be much more clock periods to settle, so the transient response may be poor. To solve this problem, many existing topologies have adopted the coarse-fine switching techniques\cite{pipeline,coarse-fine,AALDO1}. The coarse-fine switching controller applied in our design is shown in Fig.\ref{fig:peak}, output is compared with two boundaries, and the comparison results are processed by a NAND gate then to control the clock signal. If the output is beyond two boundaries, the coarse-fine switching controller select ``lclk'', and the output of ``sclk'' is zero. So the coarse shift register is driven by a clock signal and fine shift register does not work. As a result, the larger units in the PMOS array turn on and off and the output is regulated at a faster speed. Once the output reach within the boundaries, the coarse-fine switching controller then select ``sclk'' and the coarse shift register stops changing and fine shift register starts to control the smaller units of the PMOS array, as a result ripple is smaller when the output settles.
+\subsection{Asynchronous set/reset}
+The asynchronous set/reset circuit for the shift register is shown in Fig.\ref{fig:Asyn}. Each unit in the circuit only control a single bit of the shift register, so there will be m units of the asynchronous set/reset circuit in total. This circuit is only active at the switching period between different paths and is controlled by the ``path'' and ``sele'' signal. The ``path'' signal select the inactive path in the DLDO and transfer its signals to inputs of the AND gates. When path switches, an pulse appears at the ``sele'' signal. As a result, the signals at the input of the AND gates transfers to the corresponding bits of the shift register and set/reset the shift registers to its previous states before the inactive path is to be connected to the comparator.
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=\linewidth]{pic/struc/AsynSet.pdf}
+    \caption{Asynchronous set/reset circuits}
+    \label{fig:Asyn}
+\end{figure}
 \subsection{Maximum regulated outputs}
 In a stable system, the load of the LDO changes at a regular frequency, we can define the load change period as $\rm T_{load}$. Considering the best case that load change happens right after the ``sele'' signal falls down. As is shown in Fig.\ref{fig:sele}, firstly, undershoot (overshoot) occurs, then the shift register alternate the states of the PMOS array to accommodate the load, after the current provided by PMOS array meets the load requirement, the output returns to the regulated voltage. We can define the response time of the DLDO as $\rm T_{response}$, the maximum number of regulated output paths of the TDM DLDO is determined by $\rm T_{load}$, the duration of the ``sele'' signal $\rm T_{sele}$ and the response time $\rm T_{response}$. The maximum regulated outputs are:
 \begin{equation}
@@ -170,6 +180,9 @@ Note that when the output reaches the nearby of the reference, either turning on
 
 \section{Circuit implementation and considerations}
 \subsection{``sele'' signal duration}
+The ``sele'' signal in  our design has two functions. Firstly, it can modulate the ``path'' signal and generates ``p0SeleClk'' and ``p1SeleClk'' which control the active period of the two paths. In some way, this signal serves as a guard period between the two processing periods, so the duration time of ``sele'' needs to be long enough to avoid cross-talk between two paths. Secondly, ``sele'' is the enabled signal of the asynchronous set/reset circuit which load the states of the next path to the shift register before it is connected to the loop. So the duration of ``sele'' needs to be longer than the response time of shift register. However, from another perspective, the ``sele'' signal duration should not be too long as well. During the active period of the``sele'' signal, both paths are not connected to the control loop of the DLDO. On the one hand, this decreases efficiency of the circuit, on the other hand, there is risk that load change may happens during the ``sele'' period, so large undershoot may appear if the path is not connected to the loop. In our design the pulse duration of ``sele'' signal is about half period of the clock signal. 
+\subsection{``path'' signal duration}
+
 \subsection{R and C selection}
 \subsection{Sense amplifier based comparator and D-type flip flop}
 Comparator and D-type flip flop are two core circuits in the DLDO design. Comparators are usually sense amplifier based dynamic comparator. The schematic that adopted in our paper is shown in Fig.\ref{fig:comp}. It has two stages, namely pre-amplify stage and regenerate stage. When the clock is low, M4 and M7\~9 turns on, so both ``out+'' and ``out-'' is low. And when the clock switches to high, M8\~9 turns off and M12 turns on, so the pre-amplifier stage amplify the difference at the input nodes. The M1 turns on as well, so the output of the pre-amplifier stage determines the charge speed at ``out+'' and ``out-''. Once one of the nodes reaches the threshold voltage, the regenerate stage forms a positive feedback, and this node become high, the other node become low. D-type flip flop is another structure which plays an important role in the DLDO design, however, the D-type flip flop structure is hardly mentioned in the literature. The D-type flip flop adopted in our design is also a sense amplifier based structure as is shown in Fig.\ref{fig:DFF}, and the working principle of it is similar to the dynamic comparator.  When clock signal is low, M10 is closed,so the sense amplifier stop working, and M1 and M4 charge the nS and nR to high, as a result, the output latch keep the previous input data. When clock signal becomes high, M1 and M4 are closed, and M10 is open, the sense amplifier acts like a positive feedback network, input D and nD transfer the data to the output of the sense amplifier, and the latch keep the result until next clock falling edge arrives. The structure transfer data only at the clock edge, so it works like a D-type flip flop.
